@@ -1,0 +1,68 @@
+#include <stdio.h>
+#include <string.h>
+
+void desimalKeBiner(int n, char *biner) {
+    char temp[100];
+    int y = 0;
+
+    if (n == 0) {
+        strcpy(biner, "0000");
+        return;
+    }
+
+    while (n > 0) {
+        temp[y++] = (n % 2) + '0';
+        n /= 2;
+    }
+    temp[y] = '\0';
+
+    int len = y;
+    for (int z = 0; z < len; z++) {
+        biner[z] = temp[len - z - 1];
+    }
+    biner[len] = '\0';
+}
+
+void tampilkanBiner4Bit(char *biner) {
+    int len = strlen(biner);
+    int sisa = len % 4;
+
+    if (sisa != 0) {
+        int tambah = 4 - sisa;
+        for (int y = len; y >= 0; y--) {
+            biner[y + tambah] = biner[y];
+        }
+        for (int y = 0; y < tambah; y++) {
+            biner[y] = '0';
+        }
+    }
+
+    for (int y = 0; y < strlen(biner); y++) {
+        printf("%c", biner[y]);
+        if ((y + 1) % 4 == 0 && y != strlen(biner) - 1) {
+            printf(" ");
+        }
+    }
+    printf("\n");
+}
+
+int main() {
+    int desimal;
+    char biner[100];
+
+    printf("Masukkan bilangan: ");
+    scanf("%d", &desimal);
+
+    desimalKeBiner(desimal, biner);
+
+    printf("Bentuk biner: ");
+    tampilkanBiner4Bit(biner);
+
+    if (desimal % 2 == 0) {
+        printf("Bilangan %d adalah Genap\n", desimal);
+    } else {
+        printf("Bilangan %d adalah Ganjil\n", desimal);
+    }
+
+    return 0;
+}
