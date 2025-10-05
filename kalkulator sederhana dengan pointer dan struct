@@ -1,0 +1,94 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+/* Struct untuk menyimpan operasi kalkulator */
+typedef struct {
+    double a;       /* operand pertama */
+    double b;       /* operand kedua */
+    char op;        /* operator: + - * / */
+    double result;  /* hasil operasi */
+    int valid;      /* 1 jika operasi valid, 0 jika tidak (mis. pembagian nol) */
+} Calc;
+
+/* Fungsi yang menerima pointer ke Calc dan menghitung result */
+void compute(Calc *c) {
+    c->valid = 1; /* anggap valid, set 0 bila error */
+    switch (c->op) {
+        case '+': c->result = c->a + c->b; break;
+        case '-': c->result = c->a - c->b; break;
+        case '*': c->result = c->a * c->b; break;
+        case '/':
+            if (c->b == 0.0) {
+                c->valid = 0;
+            } else {
+                c->result = c->a / c->b;
+            }
+            break;
+        default:
+            c->valid = 0; /* operator tidak dikenali */
+    }
+}
+
+/* Tampilkan menu singkat */
+void print_menu(void) {
+    puts("\nKalkulator Sederhana (pakai struct + pointer)");
+    puts("Format input: <angka1> <operator> <angka2>");
+    puts("Operator yang tersedia: +  -  *  /");
+    puts("Ketik 'q' pada prompt operator untuk keluar.");
+}
+
+int main(void) {
+    Calc calc;
+    int keep_running = 1;
+
+    print_menu();
+
+    while (keep_running) {
+        printf("\nMasukkan angka pertama: ");
+        if (scanf("%lf", &calc.a) != 1) {
+            /* jika input bukan angka, bersihkan stdin dan ulangi */
+            printf("Input tidak valid. Coba lagi.\n");
+            while (getchar() != '\n'); /* buang sisa baris */
+            continue;
+        }
+
+        /* baca operator */
+        printf("Masukkan operator (+ - * /) atau q untuk keluar: ");
+        /* baca spasi sebelum %c agar mengabaikan newline sebelumnya */
+        if (scanf(" %c", &calc.op) != 1) {
+            printf("Gagal membaca operator. Coba lagi.\n");
+            while (getchar() != '\n');
+            continue;
+        }
+        if (calc.op == 'q' || calc.op == 'Q') {
+            puts("Keluar dari kalkulator. Sampai jumpa!");
+            break;
+        }
+
+        /* baca angka kedua */
+        printf("Masukkan angka kedua: ");
+        if (scanf("%lf", &calc.b) != 1) {
+            printf("Input tidak valid. Coba lagi.\n");
+            while (getchar() != '\n');
+            continue;
+        }
+
+        /* lakukan komputasi lewat pointer ke struct */
+        compute(&calc);
+
+        if (!calc.valid) {
+            if (calc.op == '/' && calc.b == 0.0) {
+                puts("Error: pembagian dengan nol tidak diperbolehkan.");
+            } else {
+                puts("Error: operator tidak dikenali atau operasi tidak valid.");
+            }
+        } else {
+            printf("Hasil: %.10g %c %.10g = %.10g\n", calc.a, calc.op, calc.b, calc.result);
+        }
+
+        /* Buat agar buffer input bersih sebelum iterasi berikutnya */
+        while (getchar() != '\n');
+    }
+
+    return 0;
+}
