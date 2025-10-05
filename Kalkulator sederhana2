@@ -1,0 +1,44 @@
+#include <stdio.h>
+struct Kalkulator {
+    float a;
+    float b;
+    char op;
+    float hasil;
+};
+void hitung(struct Kalkulator *k) {
+    if (k->op == '+')
+        k->hasil = k->a + k->b;
+    else if (k->op == '-')
+        k->hasil = k->a - k->b;
+    else if (k->op == '*')
+        k->hasil = k->a * k->b;
+    else if (k->op == '/') {
+        if (k->b != 0)
+            k->hasil = k->a / k->b;
+        else
+            printf("Error: tidak bisa dibagi 0!\n");
+    }
+    else
+        printf("Operator tidak dikenal!\n");
+}
+int main() {
+    struct Kalkulator k;
+    printf("Kalkulator Sederhana\n");
+    printf("Ketik q sebagai operator untuk keluar.\n");
+    while (1) {
+        printf("\nMasukkan angka pertama: ");
+        scanf("%f", &k.a);
+        printf("Masukkan operator (+, -, *, /, q untuk keluar): ");
+        scanf(" %c", &k.op);
+        if (k.op == 'q' || k.op == 'Q') {
+            printf("Program selesai. Terima kasih!\n");
+            break;
+        }
+        printf("Masukkan angka kedua: ");
+        scanf("%f", &k.b);
+        hitung(&k);
+        if (!(k.op == '/' && k.b == 0))
+            printf("Hasil: %.2f %c %.2f = %.2f\n", k.a, k.op, k.b, k.hasil);
+    }
+    return 0;
+}
