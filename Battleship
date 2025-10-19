@@ -1,0 +1,389 @@
+/* battleship.c
+   Battleship singleplayer: pemain vs bot
+   - Papan 10x10 (rows A-J, cols 1-10)
+   - 5 kapal: Carrier(5), Battleship(4), Cruiser(3), Submarine(3), Destroyer(2)
+   - Penempatan kapal acak untuk pemain & bot
+   - Input koordinat: <Letter><Number> contoh: A5 (baris A-J, kolom 1-10)
+   - Bot menyerang random + sederhana "target mode" setelah hit
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+#include <ctype.h>
+
+#define SIZE 10
+#define MAX_SHIPS 5
+#define TRUE 1
+#define FALSE 0
+
+typedef struct {
+    int row;
+    int col;
+} Coord;
+
+typedef struct {
+    char name[20];
+    int size;
+    int hits;
+    int placed;
+} Ship;
+
+char player_board[SIZE][SIZE];    // shows player's ships and results (for player's view)
+char player_track[SIZE][SIZE];    // what player sees of enemy: hits/misses
+char bot_board[SIZE][SIZE];       // bot's ships and results (hidden from player)
+Ship player_ships[MAX_SHIPS];
+Ship bot_ships[MAX_SHIPS];
+
+/* For bot targeting mode */
+Coord target_stack[100];
+int target_top = 0;
+int bot_last_hit_row = -1, bot_last_hit_col = -1;
+int bot_mode_targeting = FALSE;
+
+void init_boards() {
+    for (int r=0; r<SIZE; r++)
+        for (int c=0; c<SIZE; c++) {
+            player_board[r][c] = '.';
+            player_track[r][c] = '.';
+            bot_board[r][c] = '.';
+        }
+}
+
+void init_ships(Ship ships[]) {
+    // standard set: Carrier(5), Battleship(4), Cruiser(3), Submarine(3), Destroyer(2)
+    strcpy(ships[0].name, "Carrier"); ships[0].size = 5;
+    strcpy(ships[1].name, "Battleship"); ships[1].size = 4;
+    strcpy(ships[2].name, "Cruiser"); ships[2].size = 3;
+    strcpy(ships[3].name, "Submarine"); ships[3].size = 3;
+    strcpy(ships[4].name, "Destroyer"); ships[4].size = 2;
+    for (int i=0;i<MAX_SHIPS;i++){ ships[i].hits = 0; ships[i].placed = 0; }
+}
+
+int can_place(char board[SIZE][SIZE], int r, int c, int size, int horiz) {
+    if (horiz) {
+        if (c + size > SIZE) return FALSE;
+        for (int i=0;i<size;i++) if (board[r][c+i] != '.') return FALSE;
+    } else {
+        if (r + size > SIZE) return FALSE;
+        for (int i=0;i<size;i++) if (board[r+i][c] != '.') return FALSE;
+    }
+    return TRUE;
+}
+
+void place_ship(char board[SIZE][SIZE], Ship *ship, char symbol) {
+    int placed = FALSE;
+    while (!placed) {
+        int horiz = rand()%2; // 0 vertical, 1 horizontal
+        int r = rand()%SIZE;
+        int c = rand()%SIZE;
+        if (can_place(board, r, c, ship->size, horiz)) {
+            if (horiz) {
+                for (int i=0;i<ship->size;i++) board[r][c+i] = symbol;
+            } else {
+                for (int i=0;i<ship->size;i++) board[r+i][c] = symbol;
+            }
+            placed = TRUE;
+            ship->placed = 1;
+        }
+    }
+}
+
+void place_all_ships(char board[SIZE][SIZE], Ship ships[]) {
+    // use different symbols for ships: 'A','B','C','S','D'
+    char syms[MAX_SHIPS] = {'A','B','C','S','D'};
+    for (int i=0;i<MAX_SHIPS;i++) place_ship(board, &ships[i], syms[i]);
+}
+
+void print_boards_for_player() {
+    // Left: player's own board (shows ships), Right: tracking of enemy (hidden ships)
+    printf("\nYour board\t\t\tEnemy board (what you know)\n");
+    printf("   ");
+    for (int c=1;c<=SIZE;c++) printf("%2d ", c);
+    printf("     ");
+    printf("   ");
+    for (int c=1;c<=SIZE;c++) printf("%2d ", c);
+    printf("\n");
+
+    for (int r=0;r<SIZE;r++) {
+        printf(" %c ", 'A'+r);
+        for (int c=0;c<SIZE;c++) printf(" %c ", player_board[r][c]);
+        printf("     ");
+        printf(" %c ", 'A'+r);
+        for (int c=0;c<SIZE;c++) printf(" %c ", player_track[r][c]);
+        printf("\n");
+    }
+    printf("\nLegend: A/B/C/S/D = your ships, X = hit, O = miss, . = empty\n");
+}
+
+int parse_input(const char *input, int *row, int *col) {
+    // Accept formats like A5, a5, A10, J1 etc.
+    // Trim spaces
+    int len = strlen(input);
+    if (len < 2) return FALSE;
+
+    int i=0;
+    while (i<len && isspace((unsigned char)input[i])) i++;
+    if (i>=len) return FALSE;
+
+    char ch = input[i];
+    if (!isalpha((unsigned char)ch)) return FALSE;
+    ch = toupper((unsigned char)ch);
+    *row = ch - 'A';
+    i++;
+
+    // read number part
+    while (i<len && isspace((unsigned char)input[i])) i++;
+    if (i>=len) return FALSE;
+
+    int num = 0;
+    int seenDigit = FALSE;
+    while (i<len && isdigit((unsigned char)input[i])) {
+        seenDigit = TRUE;
+        num = num*10 + (input[i]-'0');
+        i++;
+    }
+    if (!seenDigit) return FALSE;
+    *col = num - 1;
+
+    if (*row < 0 || *row >= SIZE) return FALSE;
+    if (*col < 0 || *col >= SIZE) return FALSE;
+    return TRUE;
+}
+
+int is_ship_sunk(char board[SIZE][SIZE], char ship_sym) {
+    for (int r=0;r<SIZE;r++)
+        for (int c=0;c<SIZE;c++)
+            if (board[r][c] == ship_sym) return FALSE;
+    return TRUE;
+}
+
+int apply_attack(char board[SIZE][SIZE], Ship ships[], int r, int c, char visible_board[SIZE][SIZE]) {
+    // returns:
+    // 0 -> miss
+    // 1 -> hit (but not sunk)
+    // 2 -> sunk
+    // if already attacked, return -1
+    char cell = board[r][c];
+    if (cell == 'X' || cell == 'O') return -1; // already tried
+
+    if (cell == '.') {
+        board[r][c] = 'O';
+        if (visible_board) visible_board[r][c] = 'O';
+        return 0;
+    } else {
+        // cell is ship symbol (A,B,C,S,D)
+        char sym = cell;
+        board[r][c] = 'X';
+        if (visible_board) visible_board[r][c] = 'X';
+
+        // find ship by symbol to update hits (we map symbol order to ships)
+        int idx = -1;
+        if (sym == 'A') idx = 0;
+        else if (sym == 'B') idx = 1;
+        else if (sym == 'C') idx = 2;
+        else if (sym == 'S') idx = 3;
+        else if (sym == 'D') idx = 4;
+
+        if (idx != -1) {
+            ships[idx].hits++;
+            if (ships[idx].hits >= ships[idx].size) {
+                // confirm sunk (double-check board has no symbol left)
+                if (is_ship_sunk(board, sym)) return 2;
+            }
+        }
+        return 1;
+    }
+}
+
+int remaining_ships(Ship ships[]) {
+    int rem = 0;
+    for (int i=0;i<MAX_SHIPS;i++) {
+        if (ships[i].hits < ships[i].size) rem++;
+    }
+    return rem;
+}
+
+/* BOT utilities */
+
+int bot_valid_random_shot(int r, int c) {
+    if (r<0||r>=SIZE||c<0||c>=SIZE) return FALSE;
+    char marker = player_board[r][c];
+    // allow shooting on ship letters or '.' only; skip already marked hits/misses X/O
+    if (marker == 'X' || marker == 'O') return FALSE;
+    return TRUE;
+}
+
+Coord bot_random_shot() {
+    int r,c;
+    do {
+        r = rand()%SIZE;
+        c = rand()%SIZE;
+    } while (!bot_valid_random_shot(r,c));
+    Coord rc = {r,c};
+    return rc;
+}
+
+void bot_push_target(int r, int c) {
+    if (r<0||r>=SIZE||c<0||c>=SIZE) return;
+    // avoid duplicates and avoid already tried
+    for (int i=0;i<target_top;i++)
+        if (target_stack[i].row==r && target_stack[i].col==c) return;
+    if (!bot_valid_random_shot(r,c)) return;
+    target_stack[target_top].row = r;
+    target_stack[target_top].col = c;
+    target_top++;
+}
+
+Coord bot_pop_target() {
+    Coord invalid = {-1,-1};
+    if (target_top==0) return invalid;
+    target_top--;
+    return target_stack[target_top];
+}
+
+void bot_add_adjacent_targets(int r, int c) {
+    // add up, down, left, right
+    bot_push_target(r-1,c);
+    bot_push_target(r+1,c);
+    bot_push_target(r,c-1);
+    bot_push_target(r,c+1);
+}
+
+void bot_turn() {
+    printf("Bot's turn...\n");
+    Coord shot;
+    if (bot_mode_targeting && target_top>0) {
+        shot = bot_pop_target();
+        // If popped invalid (already tried), choose random
+        if (!bot_valid_random_shot(shot.row, shot.col)) {
+            shot = bot_random_shot();
+            bot_mode_targeting = FALSE;
+            target_top = 0;
+        }
+    } else {
+        shot = bot_random_shot();
+    }
+
+    int r = shot.row, c = shot.col;
+    int res = apply_attack(player_board, player_ships, r, c, NULL);
+    if (res == -1) {
+        // should not happen since bot_valid_random_shot prevented it; fallback
+        shot = bot_random_shot();
+        r = shot.row; c = shot.col;
+        res = apply_attack(player_board, player_ships, r, c, NULL);
+    }
+
+    char rowch = 'A' + r;
+    printf("Bot fires at %c%d -> ", rowch, c+1);
+    if (res == 0) {
+        printf("Miss!\n");
+    } else if (res == 1) {
+        printf("Hit!\n");
+        // enter target mode and push adjacent squares
+        bot_mode_targeting = TRUE;
+        bot_add_adjacent_targets(r,c);
+    } else if (res == 2) {
+        printf("Hit and Sunk a ship!\n");
+        // after sinking, clear target stack (simple strategy)
+        bot_mode_targeting = FALSE;
+        target_top = 0;
+    }
+}
+
+void player_turn() {
+    char input[32];
+    int row, col, ok;
+    while (1) {
+        printf("Enter coordinate to fire (e.g. A5): ");
+        if (!fgets(input, sizeof(input), stdin)) { clearerr(stdin); continue; }
+        // strip newline
+        input[strcspn(input, "\n")] = 0;
+        if (strlen(input)==0) continue;
+        ok = parse_input(input, &row, &col);
+        if (!ok) {
+            printf("Invalid input. Use format Letter(A-J) followed by number(1-10), e.g. B10\n");
+            continue;
+        }
+        // check if already tried on player_track
+        if (player_track[row][col] == 'X' || player_track[row][col] == 'O') {
+            printf("You've already fired at %c%d. Choose another coordinate.\n", 'A'+row, col+1);
+            continue;
+        }
+        int res = apply_attack(bot_board, bot_ships, row, col, player_track);
+        if (res == -1) {
+            printf("Already attacked there. Try again.\n");
+            continue;
+        } else if (res == 0) {
+            printf("Miss!\n");
+        } else if (res == 1) {
+            printf("Hit!\n");
+        } else if (res == 2) {
+            printf("Hit and Sunk a ship!\n");
+        }
+        break;
+    }
+}
+
+void show_final_boards() {
+    printf("\n=== Final Boards ===\n");
+    printf("Bot board (revealed):\n");
+    printf("   ");
+    for (int c=1;c<=SIZE;c++) printf("%2d ", c);
+    printf("\n");
+    for (int r=0;r<SIZE;r++) {
+        printf(" %c ", 'A'+r);
+        for (int c=0;c<SIZE;c++) {
+            char ch = bot_board[r][c];
+            // reveal ships: show ship letter, X for hit, O for miss, . for empty
+            printf(" %c ", ch);
+        }
+        printf("\n");
+    }
+    printf("\nYour board:\n");
+    printf("   ");
+    for (int c=1;c<=SIZE;c++) printf("%2d ", c);
+    printf("\n");
+    for (int r=0;r<SIZE;r++) {
+        printf(" %c ", 'A'+r);
+        for (int c=0;c<SIZE;c++) printf(" %c ", player_board[r][c]);
+        printf("\n");
+    }
+}
+
+int main() {
+    srand((unsigned int)time(NULL));
+    init_boards();
+    init_ships(player_ships);
+    init_ships(bot_ships);
+
+    place_all_ships(player_board, player_ships); // random placement for player's ships
+    place_all_ships(bot_board, bot_ships);
+
+    printf("=== BATTLESHIP: Player vs Bot ===\n");
+    printf("Rules: Sink all enemy ships. Enter coordinates like A5 (A-J,1-10).\n");
+    printf("Note: Your ships are visible on your board; enemy ships are hidden until hit.\n");
+
+    // main game loop: player starts
+    while (1) {
+        print_boards_for_player();
+        // player's turn
+        player_turn();
+        if (remaining_ships(bot_ships) == 0) {
+            printf("\nCongratulations! You sank all enemy ships. YOU WIN!\n");
+            show_final_boards();
+            break;
+        }
+
+        // bot's turn
+        bot_turn();
+        if (remaining_ships(player_ships) == 0) {
+            printf("\nAll your ships have been sunk. YOU LOSE.\n");
+            show_final_boards();
+            break;
+        }
+    }
+    printf("Game over. Thanks for playing!\n");
+    return 0;
+}
