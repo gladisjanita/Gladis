@@ -178,9 +178,9 @@ void bot_add_adjacent_targets(int row, int col) {
     push_target(row, col + 1); // kanan
 }
 
-/* ---------------------- PROGRAM UTAMA ---------------------- */
+/* ---------------------- GAMEPLAY UTAMA ---------------------- */
 
-int main() {
+void play_battleship() {
     char player_board[SIZE][SIZE];
     char bot_board[SIZE][SIZE];
     char bot_visible[SIZE][SIZE];
@@ -237,10 +237,10 @@ int main() {
         if (bres == 0) printf("melenceng!\n");
         else if (bres == 1) {
             printf("kena kapal kamu!\n");
-            bot_add_adjacent_targets(r, c); // tambahkan target di sekitarnya
+            bot_add_adjacent_targets(r, c);
         } else if (bres == 2) {
             printf("menenggelamkan kapalmu!\n");
-            target_top = 0; // reset targeting mode
+            target_top = 0;
         }
 
         print_boards(player_board, bot_visible);
@@ -250,6 +250,52 @@ int main() {
         printf("\nSelamat! Kamu menang!\n");
     else
         printf("\nBot menang!\n");
+}
 
+/* ---------------------- MENU UTAMA ---------------------- */
+
+void tampilkan_menu() {
+    printf("========================================\n");
+    printf("         BATTLESHIP SINGLEPLAYER        \n");
+    printf("========================================\n");
+    printf("1. Mulai Permainan\n");
+    printf("2. Cara Bermain\n");
+    printf("3. Keluar\n");
+    printf("----------------------------------------\n");
+    printf("Masukkan pilihan Anda: ");
+}
+
+int main() {
+    int pilihan;
+
+    while (1) {
+        tampilkan_menu();
+        scanf("%d", &pilihan);
+
+        if (pilihan == 1) {
+            play_battleship();
+        }
+        else if (pilihan == 2) {
+            printf("\n----------------------------------------\n");
+            printf("             CARA BERMAIN\n");
+            printf("----------------------------------------\n");
+            printf("- Papan 10x10 (A–J, 1–10)\n");
+            printf("- Masukkan koordinat, contoh: A5 atau D10\n");
+            printf("- X = Tembakan kena\n");
+            printf("- O = Tembakan meleset\n");
+            printf("- Tenggelamkan semua kapal lawan untuk menang!\n");
+            printf("----------------------------------------\n\n");
+        }
+        else if (pilihan == 3) {
+            printf("\n========================================\n");
+            printf("Terima kasih telah bermain Battleship!\n");
+            printf("Sampai jumpa di pertempuran berikutnya!\n");
+            printf("========================================\n");
+            exit(0);
+        }
+        else {
+            printf("\nPilihan tidak valid! Silakan coba lagi.\n\n");
+        }
+    }
     return 0;
 }
