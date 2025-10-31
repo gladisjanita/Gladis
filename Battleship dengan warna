@@ -1,0 +1,338 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <time.h>  // ✅ Tambahkan ini agar rand() pakai waktu sebagai seed
+
+#define SIZE 10
+#define MAX_SHIPS 5
+#define TRUE 1
+#define FALSE 0
+
+// ANSI color codes
+#define RESET "\033[0m"
+#define RED "\033[31m"
+#define GREEN "\033[32m"
+#define YELLOW "\033[33m"
+#define BLUE "\033[34m"
+#define MAGENTA "\033[35m"
+#define CYAN "\033[36m"
+#define BOLD "\033[1m"
+
+typedef struct {
+    char symbol;
+    int size;
+    int hits;
+    char name[20];
+} Ship;
+
+typedef struct {
+    int row;
+    int col;
+} Coord;
+
+void init_board(char board[SIZE][SIZE]) {
+    for (int r = 0; r < SIZE; r++)
+        for (int c = 0; c < SIZE; c++)
+            board[r][c] = '.';
+}
+
+void print_boards(char player_board[SIZE][SIZE], char bot_visible[SIZE][SIZE]) {
+    printf("\n        " CYAN BOLD "--- PAPAN PEMAIN ---" RESET "                      " CYAN BOLD "--- PAPAN LAWAN ---" RESET "\n");
+    printf("    ");
+    for (int i = 0; i < SIZE; i++) printf(" %2d", i + 1);   // setiap header kolom = 3 char
+    printf("           ");
+    for (int i = 0; i < SIZE; i++) printf(" %2d", i + 1);
+    printf("\n");
+
+    for (int r = 0; r < SIZE; r++) {
+        printf(" %c ", 'A' + r); // label baris
+
+        // papan pemain (kiri)
+        for (int c = 0; c < SIZE; c++) {
+            char ch = player_board[r][c];
+            if (ch == 'X') {
+                // tampilkan ' X' berwarna merah, lebar visual = 3 (spasi + 2-char field)
+                printf(" %s%2c%s", RED, ch, RESET);
+            } else if (ch == 'O') {
+                printf(" %s%2c%s", CYAN, ch, RESET);
+            } else if (ch == '.') {
+                // dot kosong — tetap pakai 2-char field untuk sejajar
+                printf(" %2c", ch);
+            } else {
+                // simbol kapal — hijau
+                printf(" %s%2c%s", GREEN, ch, RESET);
+            }
+        }
+
+        printf("         "); // jarak antar papan
+
+        // papan lawan (kanan) — hanya menunjukkan visible (X/O/.)
+        printf(" %c ", 'A' + r);
+        for (int c = 0; c < SIZE; c++) {
+            char ch = bot_visible[r][c];
+            if (ch == 'X') {
+                printf(" %s%2c%s", RED, ch, RESET);
+            } else if (ch == 'O') {
+                printf(" %s%2c%s", CYAN, ch, RESET);
+            } else {
+                printf(" %2c", ch);
+            }
+        }
+        printf("\n");
+    }
+
+    printf("\nLegend: " GREEN "A/B/C/S/D" RESET " = kapal kamu, " RED "X" RESET " = hit, " CYAN "O" RESET " = miss, . = kosong\n");
+}
+
+
+int is_ship_sunk(char board[SIZE][SIZE], char ship_sym) {
+    for (int r = 0; r < SIZE; r++)
+        for (int c = 0; c < SIZE; c++)
+            if (board[r][c] == ship_sym)
+                return FALSE;
+    return TRUE;
+}
+
+int remaining_ships(Ship ships[]) {
+    int rem = 0;
+    for (int i = 0; i < MAX_SHIPS; i++)
+        if (ships[i].hits < ships[i].size)
+            rem++;
+    return rem;
+}
+
+int apply_attack(char board[SIZE][SIZE], Ship ships[], int r, int c, char visible_board[SIZE][SIZE]) {
+    char cell = board[r][c];
+
+    if (cell == 'X' || cell == 'O') return -1;
+    if (cell == '.') {
+        board[r][c] = 'O';
+        if (visible_board) visible_board[r][c] = 'O';
+        return 0;
+    }
+
+    board[r][c] = 'X';
+    if (visible_board) visible_board[r][c] = 'X';
+
+    int idx = -1;
+    if (cell == 'A') idx = 0;
+    else if (cell == 'B') idx = 1;
+    else if (cell == 'C') idx = 2;
+    else if (cell == 'S') idx = 3;
+    else if (cell == 'D') idx = 4;
+
+    if (idx != -1) {
+        ships[idx].hits++;
+        if (ships[idx].hits >= ships[idx].size && is_ship_sunk(board, cell))
+            return 2; // kapal tenggelam
+    }
+    return 1; // kena
+}
+
+void place_random_ships(char board[SIZE][SIZE], Ship ships[]) {
+    for (int i = 0; i < MAX_SHIPS; i++) {
+        int placed = FALSE;
+        while (!placed) {
+            int r = rand() % SIZE;
+            int c = rand() % SIZE;
+            int orient = rand() % 2;
+            int valid = TRUE;
+
+            if (orient == 0) { // horizontal
+                if (c + ships[i].size > SIZE) valid = FALSE;
+                else {
+                    for (int k = 0; k < ships[i].size; k++)
+                        if (board[r][c + k] != '.') valid = FALSE;
+                    if (valid) {
+                        for (int k = 0; k < ships[i].size; k++)
+                            board[r][c + k] = ships[i].symbol;
+                        placed = TRUE;
+                    }
+                }
+            } else { // vertical
+                if (r + ships[i].size > SIZE) valid = FALSE;
+                else {
+                    for (int k = 0; k < ships[i].size; k++)
+                        if (board[r + k][c] != '.') valid = FALSE;
+                    if (valid) {
+                        for (int k = 0; k < ships[i].size; k++)
+                            board[r + k][c] = ships[i].symbol;
+                        placed = TRUE;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* ---------------------- BOT CERDAS (MODE TARGETING) ---------------------- */
+
+Coord target_stack[100];
+int target_top = 0;
+int bot_last_hit_row = -1, bot_last_hit_col = -1;
+int bot_mode_targeting = FALSE;
+
+void push_target(int row, int col) {
+    if (row >= 0 && row < SIZE && col >= 0 && col < SIZE) {
+        target_stack[target_top].row = row;
+        target_stack[target_top].col = col;
+        target_top++;
+    }
+}
+
+Coord pop_target() {
+    Coord c = {-1, -1};
+    if (target_top > 0) {
+        target_top--;
+        c = target_stack[target_top];
+    }
+    return c;
+}
+
+Coord bot_choose_target(char board[SIZE][SIZE]) {
+    Coord c = {-1, -1};
+
+    if (target_top > 0) {
+        c = pop_target();
+        if (board[c.row][c.col] == 'X' || board[c.row][c.col] == 'O')
+            return bot_choose_target(board);
+        return c;
+    }
+
+    do {
+        c.row = rand() % SIZE;
+        c.col = rand() % SIZE;
+    } while (board[c.row][c.col] == 'X' || board[c.row][c.col] == 'O');
+
+    return c;
+}
+
+void bot_add_adjacent_targets(int row, int col) {
+    push_target(row - 1, col);
+    push_target(row + 1, col);
+    push_target(row, col - 1);
+    push_target(row, col + 1);
+}
+
+/* ---------------------- GAMEPLAY UTAMA ---------------------- */
+
+void play_battleship() {
+    char player_board[SIZE][SIZE];
+    char bot_board[SIZE][SIZE];
+    char bot_visible[SIZE][SIZE];
+
+    Ship ships[MAX_SHIPS] = {
+        {'A', 5, 0, "Aircraft Carrier"},
+        {'B', 4, 0, "Battleship"},
+        {'C', 3, 0, "Cruiser"},
+        {'S', 3, 0, "Submarine"},
+        {'D', 2, 0, "Destroyer"}
+    };
+
+    Ship bot_ships[MAX_SHIPS];
+    for (int i = 0; i < MAX_SHIPS; i++) bot_ships[i] = ships[i];
+
+    init_board(player_board);
+    init_board(bot_board);
+    init_board(bot_visible);
+
+    srand(time(NULL));  // ✅ Ganti seed random pakai waktu agar acak setiap game
+
+    place_random_ships(player_board, ships);
+    place_random_ships(bot_board, bot_ships);
+
+    printf(YELLOW BOLD "\n\t\t\t=== GAME BATTLESHIP ===" RESET "\n");
+    print_boards(player_board, bot_visible);
+
+    while (remaining_ships(ships) > 0 && remaining_ships(bot_ships) > 0) {
+        char input[10];
+        printf("\nMasukkan koordinat serangan (contoh A5): ");
+        scanf("%s", input);
+
+        int row = toupper(input[0]) - 'A';
+        int col = atoi(&input[1]) - 1;
+
+        if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) {
+            printf(RED "Koordinat tidak valid!\n" RESET);
+            continue;
+        }
+
+        int res = apply_attack(bot_board, bot_ships, row, col, bot_visible);
+        if (res == -1) printf(YELLOW "Kamu sudah menyerang posisi itu!\n" RESET);
+        else if (res == 0) printf(CYAN "Miss!\n" RESET);
+        else if (res == 1) printf(GREEN "Hit!\n" RESET);
+        else if (res == 2) printf(RED "Sunk!\n" RESET);
+
+        /* Giliran BOT */
+        Coord target = bot_choose_target(player_board);
+        int r = target.row;
+        int c = target.col;
+        int bres = apply_attack(player_board, ships, r, c, NULL);
+
+        printf("Bot menyerang ke %c%d... ", 'A' + r, c + 1);
+        if (bres == 0) printf(CYAN "Miss!\n" RESET);
+        else if (bres == 1) {
+            printf(GREEN "Hit!\n" RESET);
+            bot_add_adjacent_targets(r, c);
+        } else if (bres == 2) {
+            printf(RED "Sunk!\n" RESET);
+            target_top = 0;
+        }
+
+        print_boards(player_board, bot_visible);
+    }
+
+    if (remaining_ships(bot_ships) == 0)
+        printf(GREEN "\nSelamat! Kamu menang!\n" RESET);
+    else
+        printf(RED "\nBot menang!\n" RESET);
+}
+
+/* ---------------------- MENU UTAMA ---------------------- */
+
+void tampilkan_menu() {
+    printf(CYAN BOLD "========================================\n" RESET);
+    printf(YELLOW BOLD "         BATTLESHIP SINGLEPLAYER        \n" RESET);
+    printf(CYAN BOLD "========================================\n" RESET);
+    printf(GREEN "1. Mulai Permainan\n" RESET);
+    printf(GREEN "2. Cara Bermain\n" RESET);
+    printf(GREEN "3. Keluar\n" RESET);
+    printf(CYAN "----------------------------------------\n" RESET);
+    printf("Masukkan pilihan Anda: ");
+}
+
+int main() {
+    int pilihan;
+
+    while (1) {
+        tampilkan_menu();
+        scanf("%d", &pilihan);
+
+        if (pilihan == 1) {
+            play_battleship();
+        }
+        else if (pilihan == 2) {
+            printf("\n----------------------------------------\n");
+            printf("             CARA BERMAIN\n");
+            printf("----------------------------------------\n");
+            printf("- Papan 10x10 (A–J, 1–10)\n");
+            printf("- Masukkan koordinat, contoh: A5 atau D10\n");
+            printf("- X = Tembakan kena\n");
+            printf("- O = Tembakan meleset\n");
+            printf("- Tenggelamkan semua kapal lawan untuk menang!\n");
+            printf("----------------------------------------\n\n");
+        }
+        else if (pilihan == 3) {
+            printf(MAGENTA "\n========================================\n" RESET);
+            printf(MAGENTA "Terima kasih telah bermain Battleship!\n" RESET);
+            printf(MAGENTA "Sampai jumpa di pertempuran berikutnya!\n" RESET);
+            printf(MAGENTA "========================================\n" RESET);
+            exit(0);
+        }
+        else {
+            printf(RED "\nPilihan tidak valid! Silakan coba lagi.\n\n" RESET);
+        }
+    }
+    return 0;
+}
