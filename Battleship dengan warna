@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <time.h>  // ✅ Tambahkan ini agar rand() pakai waktu sebagai seed
+#include <time.h>  
 
 #define SIZE 10
 #define MAX_SHIPS 5
@@ -237,7 +237,7 @@ void play_battleship() {
     init_board(bot_board);
     init_board(bot_visible);
 
-    srand(time(NULL));  // ✅ Ganti seed random pakai waktu agar acak setiap game
+    srand(time(NULL)); 
 
     place_random_ships(player_board, ships);
     place_random_ships(bot_board, bot_ships);
