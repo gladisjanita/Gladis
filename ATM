@@ -2,7 +2,7 @@
 
 int main() {
     int pilihan = 0;
-    float saldo = 1000000;  
+    float saldo = 1000000;
     float jumlah;
     int jenisTransfer;
     float biayaAdmin;
@@ -29,10 +29,10 @@ int main() {
             scanf("%f", &jumlah);
 
             if (jumlah > saldo) {
-                printf("Saldo tidak mencukupi!\n");
+                printf("Jumlah penarikan melebihi batas saldo\n");
             } else {
                 saldo -= jumlah;
-                printf("Penarikan berhasil. Saldo tersisa: Rp %.2f\n", saldo);
+                printf("Transaksi berhasil. Saldo tersisa: Rp %.2f\n", saldo);
             }
         }
 
@@ -41,7 +41,7 @@ int main() {
             scanf("%f", &jumlah);
 
             saldo += jumlah;
-            printf("Setoran berhasil. Saldo sekarang: Rp %.2f\n", saldo);
+            printf("Transaksi berhasil. Saldo tersisa: Rp %.2f\n", saldo);
         }
 
         else if (pilihan == 4) {
