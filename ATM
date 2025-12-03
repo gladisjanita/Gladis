@@ -2,87 +2,91 @@
 
 int main() {
     int pilihan = 0;
-    float saldo, tarik, setor, transfer, admin;
-    int jenis;
-
-    printf("Masukkan saldo awal Anda: Rp ");
-    scanf("%f", &saldo);
+    float saldo = 1000000;  
+    float jumlah;
+    int jenisTransfer;
+    float biayaAdmin;
+    float saldoSementara;
+    char rekeningTujuan[20];
 
     while (pilihan != 5) {
 
-        printf("\n======= MESIN ATM =======\n");
+        printf("\n=== MENU ATM ===\n");
         printf("1. Cek Saldo\n");
         printf("2. Tarik Tunai\n");
         printf("3. Setor Tunai\n");
         printf("4. Transfer\n");
         printf("5. Keluar\n");
-        printf("==========================\n");
-        printf("Pilih menu: ");
+        printf("Pilih: ");
         scanf("%d", &pilihan);
 
         if (pilihan == 1) {
-            printf("\nSaldo Anda: Rp %.2f\n", saldo);
+            printf("Saldo Anda: Rp %.2f\n", saldo);
         }
 
         else if (pilihan == 2) {
-            printf("\nMasukkan jumlah penarikan: Rp ");
-            scanf("%f", &tarik);
+            printf("Masukkan jumlah penarikan: ");
+            scanf("%f", &jumlah);
 
-            if (tarik > saldo) {
-                printf("Saldo tidak cukup!\n");
+            if (jumlah > saldo) {
+                printf("Saldo tidak mencukupi!\n");
             } else {
-                saldo -= tarik;
-                printf("Penarikan berhasil! Saldo sekarang: Rp %.2f\n", saldo);
+                saldo -= jumlah;
+                printf("Penarikan berhasil. Saldo tersisa: Rp %.2f\n", saldo);
             }
         }
 
         else if (pilihan == 3) {
-            printf("\nMasukkan jumlah setoran: Rp ");
-            scanf("%f", &setor);
+            printf("Masukkan jumlah setoran: ");
+            scanf("%f", &jumlah);
 
-            saldo += setor;
-            printf("Setoran berhasil! Saldo sekarang: Rp %.2f\n", saldo);
+            saldo += jumlah;
+            printf("Setoran berhasil. Saldo sekarang: Rp %.2f\n", saldo);
         }
 
         else if (pilihan == 4) {
-            printf("\nMasukkan jumlah transfer: Rp ");
-            scanf("%f", &transfer);
 
-            printf("Transfer ke:\n");
+            printf("Masukkan rekening tujuan: ");
+            scanf("%s", rekeningTujuan);
+
+            printf("\nTransfer ke:\n");
             printf("1. Sesama Bank (gratis)\n");
             printf("2. Beda Bank (biaya 6500)\n");
-            printf("Pilih jenis: ");
-            scanf("%d", &jenis);
+            printf("Pilih jenis transfer: ");
+            scanf("%d", &jenisTransfer);
 
-            if (jenis == 1) {
-                admin = 0;
+            if (jenisTransfer == 1) {
+                biayaAdmin = 0;
             }
-            else if (jenis == 2) {
-                admin = 6500;
+            else if (jenisTransfer == 2) {
+                biayaAdmin = 6500;
             }
             else {
                 printf("Jenis transfer tidak valid!\n");
                 continue;
             }
 
-            if (transfer + admin > saldo) {
-                printf("Saldo tidak cukup untuk transfer!\n");
-            } else {
-                saldo -= (transfer + admin);
-                printf("Transfer berhasil!\n");
-                printf("Biaya admin: Rp %.2f\n", admin);
-                printf("Saldo sekarang: Rp %.2f\n", saldo);
+            printf("Masukkan jumlah transfer: ");
+            scanf("%f", &jumlah);
+
+            if (jumlah + biayaAdmin > saldo) {
+                printf("Saldo tidak mencukupi!\n");
+            }
+            else {
+                saldo -= (jumlah + biayaAdmin);
+                printf("Transfer berhasil ke rekening %s.\n", rekeningTujuan);
+                printf("Biaya admin: Rp %.2f\n", biayaAdmin);
+                printf("Saldo tersisa: Rp %.2f\n", saldo);
             }
         }
 
         else if (pilihan == 5) {
-            printf("\nTerima kasih sudah memakai ATM.\n");
+            printf("Terima kasih telah menggunakan ATM.\n");
         }
 
         else {
-            printf("\nPilihan tidak valid!\n");
+            printf("Pilihan tidak valid!\n");
         }
-
     }
 
     return 0;
